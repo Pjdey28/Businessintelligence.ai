@@ -1,2 +1,5 @@
 .env
 backend/.venv/
+**/__pycache__/*
+*.csv
+*.txt

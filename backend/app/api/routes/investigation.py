@@ -9,6 +9,9 @@ from app.services.decomposition_service import (
 )
 from app.services.driver_service import DriverService
 from app.services.kpi_service import KPIService
+from app.services.retrieval_service import (
+    RetrievalService,
+)
 
 
 router = APIRouter()
@@ -17,6 +20,7 @@ kpi_service = KPIService()
 anomaly_service = AnomalyService()
 decomposition_service = DecompositionService()
 driver_service = DriverService()
+retrieval_service = RetrievalService()
 
 
 @router.post("/investigate")
@@ -24,14 +28,16 @@ def investigate(request: KPIRequest):
 
     try:
         df = kpi_service.get_data()
+
         latest_date = df["date"].max()
+
         current_period = latest_date.strftime(
             "%Y-%m"
         )
+
         previous_period = (
-            latest_date - pd.DateOffset(
-                months=1
-            )
+            latest_date
+            - pd.DateOffset(months=1)
         ).strftime("%Y-%m")
 
         kpi = kpi_service.calculate_kpi(
@@ -52,11 +58,13 @@ def investigate(request: KPIRequest):
             current_period=current_period,
         )
 
-        drivers = decomposition_service.decompose(
-            df=df,
-            kpi_column=column,
-            current_period=current_period,
-            previous_period=previous_period,
+        drivers = (
+            decomposition_service.decompose(
+                df=df,
+                kpi_column=column,
+                current_period=current_period,
+                previous_period=previous_period,
+            )
         )
 
         operational_drivers = (
@@ -65,6 +73,53 @@ def investigate(request: KPIRequest):
                 kpi_column=column,
             )
         )
+
+        top_drivers = drivers[:5]
+
+        driver_context = "; ".join(
+            [
+                (
+                    f"{driver.dimension}="
+                    f"{driver.value} "
+                    f"({driver.direction}, "
+                    f"{driver.contribution_percentage}% "
+                    f"contribution)"
+                )
+                for driver in top_drivers
+            ]
+        )
+
+        retrieval_query = (
+            f"Business investigation for "
+            f"{request.kpi}. "
+            f"Current period {current_period}. "
+            f"Previous period {previous_period}. "
+            f"Key drivers: {driver_context}. "
+            f"Find evidence about sales, inventory, "
+            f"operations, delivery delays, stock-outs, "
+            f"and customer complaints."
+        )
+
+        retrieved_documents = (
+            retrieval_service.retrieve(
+                query=retrieval_query,
+                top_k=3,
+            )
+        )
+
+        evidence = [
+            {
+                "source": document["source"],
+                "evidence_type": document[
+                    "evidence_type"
+                ],
+                "content": document["content"],
+                "relevance_score": document[
+                    "relevance_score"
+                ],
+            }
+            for document in retrieved_documents
+        ]
 
         return {
             "status": "success",
@@ -76,6 +131,7 @@ def investigate(request: KPIRequest):
             ],
             "operational_drivers":
                 operational_drivers,
+            "evidence": evidence,
         }
 
     except ValueError as exc:
