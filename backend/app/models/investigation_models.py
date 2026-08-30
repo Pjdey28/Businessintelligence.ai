@@ -10,6 +10,12 @@ class Driver(BaseModel):
     direction: str
 
 
+class OperationalDriver(BaseModel):
+    driver: str
+    correlation: float
+    relationship: str
+
+
 class Evidence(BaseModel):
     source: str
     evidence_type: str
@@ -34,13 +40,24 @@ class InvestigationResponse(BaseModel):
 
     executive_summary: str
 
-    drivers: List[Driver] = Field(default_factory=list)
+    drivers: List[Driver] = Field(
+        default_factory=list
+    )
 
-    evidence: List[Evidence] = Field(default_factory=list)
+    operational_drivers: List[
+        OperationalDriver
+    ] = Field(
+        default_factory=list
+    )
+
+    evidence: List[Evidence] = Field(
+        default_factory=list
+    )
 
     recommendations: List[Recommendation] = Field(
         default_factory=list
     )
 
     confidence: str
+
     ambiguity: Optional[str] = None
