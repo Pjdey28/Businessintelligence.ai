@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     api_prefix: str = "/api"
 
     groq_api_key: str = ""
-    groq_model: str = "llama-3.3-70b-versatile"
+    groq_model: str = "llama-3.1-8b-instant"
 
     data_path: str = "../data/business_data.csv"
     document_path: str = "../data/documents"
