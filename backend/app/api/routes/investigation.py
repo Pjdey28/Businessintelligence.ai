@@ -70,6 +70,20 @@ def investigate(request: KPIRequest):
             ]
         )
 
+        trend_data = (
+            df.groupby("date")[column]
+            .sum()
+            .sort_index()
+        )
+
+        trend = [
+            {
+                "period": date.strftime("%Y-%m"),
+                "value": float(value),
+            }
+            for date, value in trend_data.items()
+        ]
+
         anomaly = anomaly_service.detect(
             df=df,
             kpi_column=column,
@@ -155,6 +169,7 @@ def investigate(request: KPIRequest):
             "investigation": {
                 "kpi": kpi.model_dump(),
                 "anomaly": anomaly.model_dump(),
+                "trend": trend,
                 "drivers": [
                     driver.model_dump()
                     for driver in drivers

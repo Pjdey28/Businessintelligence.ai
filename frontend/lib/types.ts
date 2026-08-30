@@ -45,9 +45,16 @@ export interface Recommendation {
   priority: "high" | "medium" | "low";
 }
 
+export interface TrendPoint {
+  period: string;
+  value: number;
+}
+
 export interface Investigation {
   kpi: KPIResult;
   anomaly: AnomalyResult;
+
+  trend: TrendPoint[];
 
   drivers: Driver[];
 

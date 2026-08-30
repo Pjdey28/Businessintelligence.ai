@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 
+import KPITrendChart from "@/components/investigation/KPITrendChart";
+import CorrelationChart from "../components/investigation/CorrelationChart";
+import EvidenceStrength from "../components/investigation/EvidenceStrength";
 import { investigateKPI } from "@/lib/api";
 
 import type {
@@ -262,6 +265,65 @@ function InvestigationDashboard({
 
       </div>
 
+      <div className="grid gap-6 lg:grid-cols-3">
+
+        <div className="rounded-xl border bg-white p-6 shadow-sm lg:col-span-2">
+
+          <p className="text-sm font-medium text-gray-500">
+            PERFORMANCE TREND
+          </p>
+
+          <h3 className="mt-1 text-xl font-semibold">
+            KPI trajectory
+          </h3>
+
+          <div className="mt-6">
+            <KPITrendChart
+              data={investigation.trend}
+            />
+          </div>
+
+        </div>
+
+        <div className="rounded-xl border bg-white p-6 shadow-sm">
+
+          <p className="text-sm font-medium text-gray-500">
+            INVESTIGATION QUALITY
+          </p>
+
+          <h3 className="mt-1 text-xl font-semibold">
+            Evidence assessment
+          </h3>
+
+          <div className="mt-6">
+            <EvidenceStrength
+              strength={
+                investigation.evidence_strength
+              }
+              confidence={
+                investigation.confidence
+              }
+            />
+          </div>
+
+          {investigation.ambiguity && (
+            <div className="mt-5 rounded-lg bg-gray-50 p-4">
+
+              <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                Remaining uncertainty
+              </p>
+
+              <p className="mt-2 text-sm leading-6 text-gray-600">
+                {investigation.ambiguity}
+              </p>
+
+            </div>
+          )}
+
+        </div>
+
+      </div>
+
       <div className="grid gap-6 lg:grid-cols-2">
 
         <DriversPanel
@@ -275,6 +337,32 @@ function InvestigationDashboard({
             investigation.root_causes
           }
         />
+
+      </div>
+
+      <div className="rounded-xl border bg-white p-6 shadow-sm">
+
+        <p className="text-sm font-medium text-gray-500">
+          OPERATIONAL ANALYSIS
+        </p>
+
+        <h3 className="mt-1 text-xl font-semibold">
+          Relationship with operational drivers
+        </h3>
+
+        <p className="mt-2 max-w-2xl text-sm text-gray-500">
+          Statistical relationships between the KPI
+          and operational variables. These indicate
+          association, not definitive causation.
+        </p>
+
+        <div className="mt-6">
+          <CorrelationChart
+            data={
+              investigation.operational_drivers
+            }
+          />
+        </div>
 
       </div>
 

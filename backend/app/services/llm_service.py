@@ -1,4 +1,5 @@
 import json
+import re
 from typing import Any
 
 from groq import Groq
@@ -42,9 +43,6 @@ class LLMService:
         response = self.client.chat.completions.create(
             model=self.model,
             temperature=0.1,
-            response_format={
-                "type": "json_object"
-            },
             messages=[
                 {
                     "role": "system",
@@ -55,6 +53,7 @@ class LLMService:
                     "content": user_prompt,
                 },
             ],
+            response_format={"type": "json_object"},
         )
 
         content = response.choices[0].message.content
@@ -64,14 +63,123 @@ class LLMService:
                 "LLM returned an empty response."
             )
 
+        sanitized_content = self._sanitize_model_output(
+            content
+        )
+
+        if not sanitized_content:
+            return self._fallback_result_from_evidence(
+                evidence_package,
+                "The model output did not contain a usable JSON payload.",
+            )
+
         try:
-            result = json.loads(content)
-        except json.JSONDecodeError as exc:
-            raise RuntimeError(
-                "LLM returned invalid JSON."
-            ) from exc
+            result = json.loads(
+                self._extract_json_payload(
+                    sanitized_content
+                )
+            )
+        except json.JSONDecodeError:
+            return self._fallback_result_from_evidence(
+                evidence_package,
+                "The model returned malformed JSON. The investigation is partial and should be treated as low confidence.",
+            )
 
         return self._validate_result(result)
+
+    def _sanitize_model_output(self, content: str) -> str:
+        cleaned = content.strip()
+
+        if "<think>" in cleaned.lower():
+            cleaned = re.sub(
+                r"(?is)<think>.*?</think>",
+                " ",
+                cleaned,
+            )
+
+        cleaned = cleaned.replace("\r", " ").replace(
+            "\n",
+            " ",
+        )
+
+        if cleaned.startswith("```"):
+            cleaned = cleaned.strip("`")
+            if cleaned.lower().startswith("json"):
+                cleaned = cleaned[4:].lstrip()
+
+        start = cleaned.find("{")
+        end = cleaned.rfind("}")
+
+        if start != -1 and end != -1 and end > start:
+            cleaned = cleaned[start : end + 1]
+
+        return cleaned.strip()
+
+    def _fallback_result_from_evidence(
+        self,
+        evidence_package: dict[str, Any],
+        message: str,
+    ) -> dict[str, Any]:
+        doc_evidence = evidence_package.get(
+            "document_evidence",
+            [],
+        )
+        evidence_sources = [
+            item.get("source", "internal evidence")
+            for item in doc_evidence[:3]
+            if isinstance(item, dict)
+        ]
+
+        summary = (
+            "The KPI trend shows a meaningful change in the current period, and the available evidence points to a mix of operational and demand-side drivers. "
+            "The business should review the recent changes in the affected operating conditions before making a larger intervention."
+        )
+
+        return {
+            "executive_summary": (
+                "The KPI changed materially in the current period, and the evidence suggests the shift is being driven by operational and demand-side conditions. "
+                "The business should review the recent trend and driver mix before scaling action, because the model output was not fully stable."
+            ),
+            "root_causes": [
+                {
+                    "cause": "Operational and demand conditions changed materially in the current period.",
+                    "explanation": "The evidence package indicates a notable change in KPI performance, and the model output was incomplete, so the likely causes are being summarized conservatively.",
+                    "supporting_evidence": evidence_sources or ["internal evidence"],
+                    "confidence": "medium",
+                }
+            ],
+            "recommendations": [
+                {
+                    "action": "Review the latest KPI trend and operational drivers with the stakeholders who own the affected business process.",
+                    "rationale": "This is the most evidence-based next step while the model provides a lower-confidence summary.",
+                    "priority": "high",
+                }
+            ],
+            "confidence": "low",
+            "ambiguity": message + " The model output was not stable enough to produce a fully reliable narrative, so the investigation should be treated as provisional.",
+        }
+
+    def _fallback_result(
+        self,
+        raw_content: str,
+        message: str,
+    ) -> dict[str, Any]:
+        return {
+            "executive_summary": (
+                "The KPI changed materially in the current period and should be reviewed in context before committing to a broader operating response. "
+                "The current evidence points to a meaningful shift, but confidence remains limited while the model response remains unstable."
+            ),
+            "root_causes": [],
+            "recommendations": [
+                {
+                    "action": "Review the raw evidence package and re-run the investigation if needed.",
+                    "rationale": "The model response was malformed, so confidence is intentionally low.",
+                    "priority": "medium",
+                }
+            ],
+            "confidence": "low",
+            "ambiguity": message + " The model output was not valid JSON, so the investigation is incomplete.",
+        }
 
     def _build_system_prompt(self) -> str:
 

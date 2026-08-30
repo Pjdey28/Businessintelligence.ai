@@ -38,6 +38,11 @@ class Recommendation(BaseModel):
     priority: str
 
 
+class TrendPoint(BaseModel):
+    period: str
+    value: float
+
+
 class InvestigationResponse(BaseModel):
     kpi: str
     current_value: float
@@ -48,6 +53,10 @@ class InvestigationResponse(BaseModel):
     anomaly_score: float
 
     executive_summary: str
+
+    trend: List[TrendPoint] = Field(
+        default_factory=list
+    )
 
     root_causes: List[RootCause] = Field(
         default_factory=list
