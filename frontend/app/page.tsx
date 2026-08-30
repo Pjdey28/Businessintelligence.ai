@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import KPITrendChart from "@/components/investigation/KPITrendChart";
 import CorrelationChart from "../components/investigation/CorrelationChart";
@@ -8,8 +8,18 @@ import EvidenceStrength from "../components/investigation/EvidenceStrength";
 import { investigateKPI } from "@/lib/api";
 
 import type {
+  Driver,
   Investigation,
 } from "@/lib/types";
+
+const KPI_OPTIONS = [
+  { value: "revenue", label: "Revenue" },
+  { value: "units_sold", label: "Units Sold" },
+  { value: "customer_complaints", label: "Customer Complaints" },
+  { value: "inventory_available", label: "Inventory Available" },
+  { value: "stockout_rate", label: "Stockout Rate" },
+  { value: "delivery_delay_rate", label: "Delivery Delay Rate" },
+] as const;
 
 export default function Home() {
   const [kpi, setKpi] =
@@ -21,8 +31,41 @@ export default function Home() {
   const [investigation, setInvestigation] =
     useState<Investigation | null>(null);
 
+  const [selectedDriver, setSelectedDriver] =
+    useState<Driver | null>(null);
+
   const [loading, setLoading] =
     useState(false);
+
+  useEffect(() => {
+    if (!investigation) {
+      setSelectedDriver(null);
+      return;
+    }
+
+    if (
+      investigation.drivers.length === 0
+    ) {
+      setSelectedDriver(null);
+      return;
+    }
+
+    setSelectedDriver((current) => {
+      if (
+        current &&
+        investigation.drivers.some(
+          (driver) =>
+            driver.dimension ===
+              current.dimension &&
+            driver.value === current.value,
+        )
+      ) {
+        return current;
+      }
+
+      return investigation.drivers[0];
+    });
+  }, [investigation]);
 
   const [error, setError] =
     useState<string | null>(null);
@@ -116,13 +159,14 @@ export default function Home() {
                 }
                 className="w-full rounded-lg border px-4 py-3 outline-none focus:ring-2 focus:ring-gray-300"
               >
-                <option value="revenue">
-                  Revenue
-                </option>
-
-                <option value="units_sold">
-                  Units Sold
-                </option>
+                {KPI_OPTIONS.map((option) => (
+                  <option
+                    key={option.value}
+                    value={option.value}
+                  >
+                    {option.label}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -175,6 +219,12 @@ export default function Home() {
               investigation={
                 investigation
               }
+              selectedDriver={
+                selectedDriver
+              }
+              onSelectDriver={
+                setSelectedDriver
+              }
             />
           </div>
         )}
@@ -188,8 +238,12 @@ export default function Home() {
 
 function InvestigationDashboard({
   investigation,
+  selectedDriver,
+  onSelectDriver,
 }: {
   investigation: Investigation;
+  selectedDriver: Driver | null;
+  onSelectDriver: (driver: Driver) => void;
 }) {
   return (
     <div className="space-y-6">
@@ -330,6 +384,12 @@ function InvestigationDashboard({
           drivers={
             investigation.drivers
           }
+          selectedDriver={
+            selectedDriver
+          }
+          onSelectDriver={
+            onSelectDriver
+          }
         />
 
         <RootCausePanel
@@ -421,8 +481,12 @@ function MetricCard({
 
 function DriversPanel({
   drivers,
+  selectedDriver,
+  onSelectDriver,
 }: {
   drivers: Investigation["drivers"];
+  selectedDriver: Driver | null;
+  onSelectDriver: (driver: Driver) => void;
 }) {
   return (
     <div className="rounded-xl border bg-white p-6 shadow-sm">
@@ -444,45 +508,61 @@ function DriversPanel({
           </p>
         ) : (
           drivers.slice(0, 6).map(
-            (driver, index) => (
-              <div key={index}>
+            (driver, index) => {
+              const isSelected =
+                selectedDriver &&
+                selectedDriver.dimension ===
+                  driver.dimension &&
+                selectedDriver.value ===
+                  driver.value;
 
-                <div className="mb-2 flex items-center justify-between text-sm">
+              return (
+                <button
+                  key={`${driver.dimension}-${driver.value}-${index}`}
+                  type="button"
+                  onClick={() => onSelectDriver(driver)}
+                  className={`w-full rounded-lg border p-3 text-left transition ${
+                    isSelected
+                      ? "border-gray-900 bg-gray-50"
+                      : "border-transparent hover:border-gray-200 hover:bg-gray-50"
+                  }`}
+                >
+                  <div className="mb-2 flex items-center justify-between text-sm">
 
-                  <span className="font-medium">
-                    {driver.value}
-                  </span>
+                    <span className="font-medium">
+                      {driver.value}
+                    </span>
 
-                  <span className="text-gray-500">
-                    {driver.contribution_percentage.toFixed(
-                      1,
-                    )}
-                    %
-                  </span>
+                    <span className="text-gray-500">
+                      {driver.contribution_percentage.toFixed(
+                        1,
+                      )}
+                      %
+                    </span>
 
-                </div>
+                  </div>
 
-                <div className="h-2 overflow-hidden rounded-full bg-gray-100">
+                  <div className="h-2 overflow-hidden rounded-full bg-gray-100">
 
-                  <div
-                    className="h-full rounded-full bg-gray-900"
-                    style={{
-                      width: `${Math.min(
-                        driver.contribution_percentage,
-                        100,
-                      )}%`,
-                    }}
-                  />
+                    <div
+                      className="h-full rounded-full bg-gray-900"
+                      style={{
+                        width: `${Math.min(
+                          driver.contribution_percentage,
+                          100,
+                        )}%`,
+                      }}
+                    />
 
-                </div>
+                  </div>
 
-                <p className="mt-1 text-xs text-gray-500">
-                  {driver.dimension} ·{" "}
-                  {driver.direction}
-                </p>
-
-              </div>
-            ),
+                  <p className="mt-1 text-xs text-gray-500">
+                    {driver.dimension} ·{" "}
+                    {driver.direction}
+                  </p>
+                </button>
+              );
+            },
           )
         )}
 
@@ -492,6 +572,97 @@ function DriversPanel({
   );
 }
 
+
+function DriverDetailPanel({
+  driver,
+  evidence,
+  operationalDrivers,
+}: {
+  driver: Driver;
+  evidence: Investigation["evidence"];
+  operationalDrivers: Investigation["operational_drivers"];
+}) {
+  const evidenceMatches =
+    evidence.filter((item) => {
+      const text = `${item.source} ${item.content}`.toLowerCase();
+      const tokens = [
+        driver.value.toLowerCase(),
+        driver.dimension.toLowerCase(),
+      ];
+
+      return tokens.some((token) =>
+        text.includes(token),
+      );
+    });
+
+  const supportingSignals =
+    operationalDrivers.slice(0, 3);
+
+  return (
+    <div className="rounded-xl border bg-white p-6 shadow-sm">
+      <p className="text-sm font-medium text-gray-500">
+        DRIVER DRILL-DOWN
+      </p>
+
+      <h3 className="mt-1 text-xl font-semibold">
+        {driver.value}
+      </h3>
+
+      <div className="mt-5 grid gap-6 lg:grid-cols-2">
+        <div className="rounded-lg border bg-gray-50 p-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+            Why this matters
+          </p>
+
+          <p className="mt-3 text-sm leading-6 text-gray-700">
+            {driver.dimension} is contributing {driver.contribution_percentage.toFixed(1)}% of the KPI movement and is trending {driver.direction}. This is a meaningful business signal, but it should be interpreted as a contributing factor rather than a guaranteed causal explanation.
+          </p>
+        </div>
+
+        <div className="rounded-lg border bg-gray-50 p-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+            Related operational signals
+          </p>
+
+          <ul className="mt-3 space-y-2 text-sm text-gray-700">
+            {supportingSignals.length === 0 ? (
+              <li>No related operational signals were identified.</li>
+            ) : (
+              supportingSignals.map((signal, index) => (
+                <li key={`${signal.driver}-${index}`}>
+                  {signal.driver}: {signal.relationship} ({signal.correlation.toFixed(2)})
+                </li>
+              ))
+            )}
+          </ul>
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <p className="text-sm font-medium text-gray-500">
+          SUPPORTING EVIDENCE
+        </p>
+
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          {(evidenceMatches.length > 0 ? evidenceMatches : evidence.slice(0, 2)).map((item, index) => (
+            <div key={`${item.source}-${index}`} className="rounded-lg border p-4">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm font-semibold">{item.source}</span>
+                <span className="text-xs text-gray-500">
+                  {(item.relevance_score * 100).toFixed(0)}%
+                </span>
+              </div>
+
+              <p className="mt-3 text-sm leading-6 text-gray-600">
+                {item.content}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function RootCausePanel({
   rootCauses,

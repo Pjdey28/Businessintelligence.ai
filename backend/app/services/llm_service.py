@@ -18,21 +18,26 @@ class LLMService:
 
     def __init__(self):
 
+        self.model = settings.groq_model
+        self.client = None
+
         if not settings.groq_api_key:
-            raise ValueError(
-                "GROQ_API_KEY is not configured."
-            )
+            return
 
         self.client = Groq(
             api_key=settings.groq_api_key
         )
 
-        self.model = settings.groq_model
-
     def generate_investigation(
         self,
         evidence_package: dict[str, Any],
     ) -> dict[str, Any]:
+
+        if self.client is None:
+            return self._fallback_result_from_evidence(
+                evidence_package,
+                "GROQ_API_KEY is not configured, so the investigation is using a local evidence-only fallback.",
+            )
 
         system_prompt = self._build_system_prompt()
 
@@ -40,21 +45,27 @@ class LLMService:
             evidence_package
         )
 
-        response = self.client.chat.completions.create(
-            model=self.model,
-            temperature=0.1,
-            messages=[
-                {
-                    "role": "system",
-                    "content": system_prompt,
-                },
-                {
-                    "role": "user",
-                    "content": user_prompt,
-                },
-            ],
-            response_format={"type": "json_object"},
-        )
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                temperature=0.1,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": system_prompt,
+                    },
+                    {
+                        "role": "user",
+                        "content": user_prompt,
+                    },
+                ],
+                response_format={"type": "json_object"},
+            )
+        except Exception:
+            return self._fallback_result_from_evidence(
+                evidence_package,
+                "The Groq API call failed, so the investigation is using a local evidence-only fallback.",
+            )
 
         content = response.choices[0].message.content
 
