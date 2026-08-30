@@ -18,6 +18,9 @@ from app.services.evidence_service import (
 from app.services.kpi_service import (
     KPIService,
 )
+from app.services.llm_service import (
+    LLMService,
+)
 from app.services.retrieval_service import (
     RetrievalService,
 )
@@ -35,6 +38,7 @@ retrieval_service = RetrievalService()
 evidence_service = (
     EvidenceFusionService()
 )
+llm_service = LLMService()
 
 
 @router.post("/investigate")
@@ -140,11 +144,52 @@ def investigate(request: KPIRequest):
             )
         )
 
+        llm_result = (
+            llm_service.generate_investigation(
+                evidence_package
+            )
+        )
+
         return {
             "status": "success",
-            "investigation": (
-                evidence_package
-            ),
+            "investigation": {
+                "kpi": kpi.model_dump(),
+                "anomaly": anomaly.model_dump(),
+                "drivers": [
+                    driver.model_dump()
+                    for driver in drivers
+                ],
+                "operational_drivers":
+                    operational_drivers,
+                "evidence":
+                    evidence_package[
+                        "document_evidence"
+                    ],
+                "evidence_strength":
+                    evidence_package[
+                        "evidence_strength"
+                    ],
+                "executive_summary":
+                    llm_result[
+                        "executive_summary"
+                    ],
+                "root_causes":
+                    llm_result[
+                        "root_causes"
+                    ],
+                "recommendations":
+                    llm_result[
+                        "recommendations"
+                    ],
+                "confidence":
+                    llm_result[
+                        "confidence"
+                    ],
+                "ambiguity":
+                    llm_result[
+                        "ambiguity"
+                    ],
+            },
         }
 
     except ValueError as exc:
@@ -155,6 +200,13 @@ def investigate(request: KPIRequest):
         )
 
     except FileNotFoundError as exc:
+
+        raise HTTPException(
+            status_code=500,
+            detail=str(exc),
+        )
+
+    except RuntimeError as exc:
 
         raise HTTPException(
             status_code=500,

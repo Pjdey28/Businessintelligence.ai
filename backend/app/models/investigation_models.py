@@ -23,6 +23,15 @@ class Evidence(BaseModel):
     relevance_score: float
 
 
+class RootCause(BaseModel):
+    cause: str
+    explanation: str
+    supporting_evidence: List[str] = Field(
+        default_factory=list
+    )
+    confidence: str
+
+
 class Recommendation(BaseModel):
     action: str
     rationale: str
@@ -40,6 +49,10 @@ class InvestigationResponse(BaseModel):
 
     executive_summary: str
 
+    root_causes: List[RootCause] = Field(
+        default_factory=list
+    )
+
     drivers: List[Driver] = Field(
         default_factory=list
     )
@@ -54,7 +67,9 @@ class InvestigationResponse(BaseModel):
         default_factory=list
     )
 
-    recommendations: List[Recommendation] = Field(
+    recommendations: List[
+        Recommendation
+    ] = Field(
         default_factory=list
     )
 
