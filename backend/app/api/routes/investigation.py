@@ -1,3 +1,5 @@
+from urllib import request
+
 import pandas as pd
 
 from fastapi import APIRouter, HTTPException
@@ -69,9 +71,10 @@ def investigate(request: KPIRequest):
                 request.kpi.lower()
             ]
         )
+        trend_df = df[df["date"] <= current_date]
 
         trend_data = (
-            df.groupby("date")[column]
+            trend_df.groupby("date")[column]
             .sum()
             .sort_index()
         )
