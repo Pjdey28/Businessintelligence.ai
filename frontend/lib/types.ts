@@ -17,6 +17,14 @@ export interface Driver {
   value: string;
   contribution_percentage: number;
   direction: "increase" | "decrease";
+
+  explanation?: string;
+
+  affected_products?: string[];
+
+  supporting_evidence?: string[];
+
+  confidence?: "high" | "medium" | "low";
 }
 
 export interface OperationalDriver {

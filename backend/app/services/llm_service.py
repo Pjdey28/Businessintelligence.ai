@@ -1,5 +1,6 @@
 import json
 import re
+import os
 from typing import Any
 
 from groq import Groq
@@ -49,6 +50,7 @@ class LLMService:
             response = self.client.chat.completions.create(
                 model=self.model,
                 temperature=0.1,
+                max_tokens=6000,
                 messages=[
                     {
                         "role": "system",
@@ -59,7 +61,6 @@ class LLMService:
                         "content": user_prompt,
                     },
                 ],
-                response_format={"type": "json_object"},
             )
         except Exception:
             return self._fallback_result_from_evidence(
@@ -68,7 +69,9 @@ class LLMService:
             )
 
         content = response.choices[0].message.content
-
+        print("\n--- RAW QWEN OUTPUT ---")
+        print(content)
+        print("-----------------------\n")
         if not content:
             raise RuntimeError(
                 "LLM returned an empty response."
@@ -85,11 +88,7 @@ class LLMService:
             )
 
         try:
-            result = json.loads(
-                self._extract_json_payload(
-                    sanitized_content
-                )
-            )
+            result = json.loads(sanitized_content)
         except json.JSONDecodeError:
             return self._fallback_result_from_evidence(
                 evidence_package,
@@ -99,32 +98,19 @@ class LLMService:
         return self._validate_result(result)
 
     def _sanitize_model_output(self, content: str) -> str:
-        cleaned = content.strip()
-
-        if "<think>" in cleaned.lower():
-            cleaned = re.sub(
-                r"(?is)<think>.*?</think>",
-                " ",
-                cleaned,
-            )
-
-        cleaned = cleaned.replace("\r", " ").replace(
-            "\n",
-            " ",
-        )
-
-        if cleaned.startswith("```"):
-            cleaned = cleaned.strip("`")
-            if cleaned.lower().startswith("json"):
-                cleaned = cleaned[4:].lstrip()
-
-        start = cleaned.find("{")
-        end = cleaned.rfind("}")
-
-        if start != -1 and end != -1 and end > start:
-            cleaned = cleaned[start : end + 1]
-
-        return cleaned.strip()
+            # 1. Aggressively delete the entire <think> block and everything inside it
+            content = re.sub(r"(?is)<think>.*?</think>", "", content)
+            
+            # 2. Now find the first { and last } in the REMAINING text
+            start = content.find("{")
+            end = content.rfind("}")
+            
+            if start != -1 and end != -1 and end > start:
+                # 3. Extract the clean JSON block
+                cleaned = content[start : end + 1]
+                return cleaned.strip()
+                
+            return content.strip()
 
     def _fallback_result_from_evidence(
         self,
@@ -193,74 +179,34 @@ class LLMService:
         }
 
     def _build_system_prompt(self) -> str:
-
         return """
-You are the reasoning engine of
-BusinessIntelligence.ai, an enterprise KPI
-investigation system.
+You are a data processing API. You MUST output ONLY valid, raw JSON. 
+CRITICAL RULES:
+1. Do NOT output any conversational text, preamble, or markdown formatting (no ```json).
+2. Start your final response immediately with the { character.
 
-Your task is to transform an evidence package into
-an executive-level business investigation.
-
-IMPORTANT RULES:
-
-1. Use only information contained in the evidence
-   package.
-
-2. Do not invent numbers, events, causes, documents,
-   customers, products, or operational facts.
-
-3. Do not claim causation merely because two variables
-   are correlated.
-
-4. Clearly distinguish:
-   - observed facts
-   - statistical relationships
-   - likely explanations
-   - uncertainty
-
-5. If the evidence is insufficient, explicitly say so.
-
-6. Recommendations must be connected to the evidence.
-
-7. Do not recommend actions that require facts not
-   present in the evidence.
-
-8. Evidence references must use the exact source names
-   provided in the evidence package.
-
-9. Confidence must reflect the strength and consistency
-   of the available evidence.
-
-10. The final response must be concise enough for a
-    business executive but sufficiently specific to
-    explain the investigation.
-
-Return ONLY valid JSON.
-
-The JSON must have this structure:
-
+The JSON MUST have exactly this structure:
 {
-  "executive_summary": "string",
+  "executive_summary": "Write a 2-3 sentence detailed summary of what changed here.",
   "root_causes": [
     {
-      "cause": "string",
-      "explanation": "string",
+      "cause": "Name the specific operational cause here.",
+      "explanation": "Explain why this cause matters based on the evidence.",
       "supporting_evidence": [
         "source name"
       ],
-      "confidence": "high|medium|low"
+      "confidence": "high"
     }
   ],
   "recommendations": [
     {
-      "action": "string",
-      "rationale": "string",
-      "priority": "high|medium|low"
+      "action": "Name the specific action to take.",
+      "rationale": "Explain why this action will help.",
+      "priority": "high"
     }
   ],
-  "confidence": "high|medium|low",
-  "ambiguity": "string or null"
+  "confidence": "high",
+  "ambiguity": "Note any missing data or uncertainty here."
 }
 """
 
@@ -299,6 +245,10 @@ EVIDENCE PACKAGE:
         self,
         result: dict[str, Any],
     ) -> dict[str, Any]:
+        if not isinstance(result, dict):
+            raise RuntimeError(
+                "LLM response was not a JSON object."
+            )
 
         required_fields = [
             "executive_summary",
@@ -309,17 +259,45 @@ EVIDENCE PACKAGE:
         ]
 
         for field in required_fields:
-            if field not in result:
-                raise RuntimeError(
-                    f"LLM response missing field: "
-                    f"{field}"
-                )
+            value = result.get(field)
 
-        if result["confidence"] not in {
-            "high",
-            "medium",
-            "low",
-        }:
+            if value is None:
+                if field == "executive_summary":
+                    result[field] = (
+                        "The AI model did not generate a summary. "
+                        "Please review the operational evidence."
+                    )
+                elif field == "ambiguity":
+                    result[field] = "No ambiguity detected."
+                else:
+                    result[field] = [] if field in {"root_causes", "recommendations"} else "low"
+                continue
+
+            if isinstance(value, str) and value.strip() == "":
+                if field == "executive_summary":
+                    result[field] = (
+                        "The AI model did not generate a summary. "
+                        "Please review the operational evidence."
+                    )
+                elif field == "ambiguity":
+                    result[field] = "No ambiguity detected."
+                else:
+                    result[field] = [] if field in {"root_causes", "recommendations"} else "low"
+                continue
+
+            if field in {"root_causes", "recommendations"} and not isinstance(value, list):
+                result[field] = []
+
+            if field == "confidence" and not isinstance(value, str):
+                result[field] = "low"
+
+        confidence = str(result.get("confidence", "low")).lower()
+        if confidence not in {"high", "medium", "low"}:
             result["confidence"] = "low"
+        else:
+            result["confidence"] = confidence
+
+        if not isinstance(result.get("ambiguity"), str):
+            result["ambiguity"] = "No ambiguity detected."
 
         return result

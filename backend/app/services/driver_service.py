@@ -23,10 +23,10 @@ class DriverService:
     ) -> list[dict]:
 
         available_columns = [
-            column
-            for column in self.DRIVER_COLUMNS
-            if column in df.columns
-        ]
+                    column
+                    for column in self.DRIVER_COLUMNS
+                    if column in df.columns and column != kpi_column
+                ]
 
         if not available_columns:
             return []

@@ -47,16 +47,16 @@ def investigate(request: KPIRequest):
     try:
         df = kpi_service.get_data()
 
-        latest_date = df["date"].max()
-
-        current_period = (
-            latest_date.strftime("%Y-%m")
-        )
+            # Extract the exact period requested by the frontend dropdown
+        current_period = request.period
+            
+            # Convert it to a pandas Timestamp to easily calculate the previous month
+        current_date = pd.Timestamp(f"{current_period}-01")
 
         previous_period = (
-            latest_date
-            - pd.DateOffset(months=1)
-        ).strftime("%Y-%m")
+                current_date
+                - pd.DateOffset(months=1)
+            ).strftime("%Y-%m")
 
         kpi = kpi_service.calculate_kpi(
             kpi=request.kpi,
