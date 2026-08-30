@@ -3,12 +3,21 @@ import pandas as pd
 from fastapi import APIRouter, HTTPException
 
 from app.models.kpi_models import KPIRequest
-from app.services.anomaly_service import AnomalyService
+from app.services.anomaly_service import (
+    AnomalyService,
+)
 from app.services.decomposition_service import (
     DecompositionService,
 )
-from app.services.driver_service import DriverService
-from app.services.kpi_service import KPIService
+from app.services.driver_service import (
+    DriverService,
+)
+from app.services.evidence_service import (
+    EvidenceFusionService,
+)
+from app.services.kpi_service import (
+    KPIService,
+)
 from app.services.retrieval_service import (
     RetrievalService,
 )
@@ -18,9 +27,14 @@ router = APIRouter()
 
 kpi_service = KPIService()
 anomaly_service = AnomalyService()
-decomposition_service = DecompositionService()
+decomposition_service = (
+    DecompositionService()
+)
 driver_service = DriverService()
 retrieval_service = RetrievalService()
+evidence_service = (
+    EvidenceFusionService()
+)
 
 
 @router.post("/investigate")
@@ -31,8 +45,8 @@ def investigate(request: KPIRequest):
 
         latest_date = df["date"].max()
 
-        current_period = latest_date.strftime(
-            "%Y-%m"
+        current_period = (
+            latest_date.strftime("%Y-%m")
         )
 
         previous_period = (
@@ -63,7 +77,9 @@ def investigate(request: KPIRequest):
                 df=df,
                 kpi_column=column,
                 current_period=current_period,
-                previous_period=previous_period,
+                previous_period=(
+                    previous_period
+                ),
             )
         )
 
@@ -107,31 +123,28 @@ def investigate(request: KPIRequest):
             )
         )
 
-        evidence = [
-            {
-                "source": document["source"],
-                "evidence_type": document[
-                    "evidence_type"
+        evidence_package = (
+            evidence_service.build_package(
+                kpi=kpi.model_dump(),
+                anomaly=anomaly.model_dump(),
+                drivers=[
+                    driver.model_dump()
+                    for driver in drivers
                 ],
-                "content": document["content"],
-                "relevance_score": document[
-                    "relevance_score"
-                ],
-            }
-            for document in retrieved_documents
-        ]
+                operational_drivers=(
+                    operational_drivers
+                ),
+                retrieved_evidence=(
+                    retrieved_documents
+                ),
+            )
+        )
 
         return {
             "status": "success",
-            "kpi": kpi.model_dump(),
-            "anomaly": anomaly.model_dump(),
-            "drivers": [
-                driver.model_dump()
-                for driver in drivers
-            ],
-            "operational_drivers":
-                operational_drivers,
-            "evidence": evidence,
+            "investigation": (
+                evidence_package
+            ),
         }
 
     except ValueError as exc:
