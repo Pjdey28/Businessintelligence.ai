@@ -1,0 +1,22 @@
+INVENTORY OPERATIONS REPORT
+Reporting Period: March-April 2025
+
+During April 2025, inventory availability for Product A,
+Product B, and Product C remained broadly stable across
+North, South, and West regions.
+
+The East region experienced a noticeable deterioration
+in Product D availability during the second half of April.
+
+Product D inventory availability declined due to delayed
+replenishment from the primary supplier.
+
+The supply interruption resulted in increased stock-out
+events for Product D in the East region.
+
+Operations teams initiated replenishment requests, but
+normal inventory levels were not fully restored during
+the reporting period.
+
+Product D should be monitored closely in the East region
+during the following reporting cycle.

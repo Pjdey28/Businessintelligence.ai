@@ -50,7 +50,7 @@ class LLMService:
             response = self.client.chat.completions.create(
                 model=self.model,
                 temperature=0.1,
-                max_tokens=6000,
+                max_tokens=1000,
                 messages=[
                     {
                         "role": "system",
